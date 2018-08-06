@@ -4,90 +4,197 @@
     // Modifications are not saved on browser refresh/close though -- copy often!
     return {
         // Set defaultToken to invalid to see what you do not tokenize yet
-        // defaultToken: 'invalid',
-
-        keywords: [
-            'syntax', 'package', 'option', 'message', 'repeated', 'oneof', 'enum', 'reserved'
-        ],
+        //defaultToken: 'invalid',
 
         typeKeywords: [
-            'bool', 'double', 'int', 'float', 'int32', 'uint32', 'int64', 'uint64', 'string', 'sint32', 'sint64', 'fixed32', 'fixed64', 'sfixed32', 'sfixed64', 'bytes'
+            "double", "float", "int32", "int64", "uint32", "uint64",
+            "sint32", "sint64", "fixed32", "fixed64", "sfixed32", "sfixed64",
+            "bool", "string", "bytes"
         ],
 
-        operators: [
-            '='
-        ],
+        ident: /[A-Za-z][A-Za-z0-9_]*/,
 
-        // we include these common regular expressions
-        symbols: /[=><!~?:&|+\-*\/\^%]+/,
-
-        // C# style strings
-        escapes: /\\(?:[abfnrtv\\"']|x[0-9A-Fa-f]{1,4}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8})/,
+        field: /(@ident)(\s+)(@ident)(\s*\=\s*)([1-9][0-9]*)(;)/,
 
         // The main tokenizer for our languages
         tokenizer: {
             root: [
-                // identifiers and keywords
-                [/[a-z_$][\w$]*/, {
-                    cases: {
-                        '@typeKeywords': 'keyword',
-                        '@keywords': 'keyword',
-                        '@default': 'identifier'
-                    }
-                }],
-                [/[A-Z][\w\$]*/, 'type.identifier'],  // to show class names nicely
-
-                // whitespace
-                { include: '@whitespace' },
-
-                // delimiters and operators
-                [/[{}()\[\]]/, '@brackets'],
-                [/[<>](?!@symbols)/, '@brackets'],
-                [/@symbols/, {
-                    cases: {
-                        '@operators': 'operator',
-                        '@default': ''
-                    }
-                }],
-
-                // numbers
-                [/\d+/, 'number'],
-
-                // delimiter: after number because of .\d floats
-                [/[;,.]/, 'delimiter'],
-
-                // characters
-                [/'[^\\']'/, 'string'],
-                [/(')(@escapes)(')/, ['string', 'string.escape', 'string']],
-                [/'/, 'string.invalid']
+                { include: "whitespace" },
+                {
+                    regex: /(syntax)(\s*\=\s*)((?:"proto3")|(?:'proto3'))(;)/,
+                    action: [
+                        { token: "keyword" },
+                        { token: "" },
+                        { token: "string" },
+                        { token: "", next: "root3" }
+                    ]
+                },
+                {
+                    regex: /(syntax)(\s*\=\s*)((?:"proto2")|(?:'proto2'))(;)/,
+                    action: [
+                        { token: "keyword" },
+                        { token: "" },
+                        { token: "string" },
+                        { token: "", next: "root2" }
+                    ]
+                }
             ],
-
-            comment: [
-                [/[^\/*]+/, 'comment'],
-                [/\/\*/, 'comment', '@push'],    // nested comment
-                ["\\*/", 'comment', '@pop'],
-                [/[\/*]/, 'comment']
+            root3: [
+                { include: "whitespace" },
+                { include: "general3" },
+                { include: "sharedroot" }
             ],
-
-            string: [
-                [/[^\\"]+/, 'string'],
-                [/@escapes/, 'string.escape'],
-                [/\\./, 'string.escape.invalid'],
-                [/"/, { token: 'string.quote', bracket: '@close', next: '@pop' }]
+            root2: [
+                { include: "whitespace" },
+                { include: "sharedroot" }
             ],
-
-            litstring: [
-                [/[^"]+/, 'string'],
-                [/""/, 'string.escape'],
-                [/"/, { token: 'string.quote', bracket: '@close', next: '@pop' }]
+            sharedroot: [
+                {
+                    regex: /(import)(\s+)(".+")(;)/,
+                    action: [
+                        { token: "keyword" },
+                        { token: "" },
+                        { token: "string" },
+                        { token: "" }
+                    ]
+                },
+                {
+                    regex: /(package)(\s+)([A-Za-z\.]+)(;)/,
+                    action: [
+                        { token: "keyword" },
+                        { token: "" },
+                        { token: "namespace" },
+                        { token: "" }
+                    ]
+                },
+                {
+                    regex: /(option)(\s+)(@ident)(\s*\=\s*)(.+)(;)/,
+                    action: [
+                        { token: "keyword" },
+                        { token: "" },
+                        { token: "identifier" },
+                        { token: "" },
+                        {
+                            cases: {
+                                "'.+'": "string",
+                                "\".+.\"": "string",
+                                "true|false": "keyword",
+                                "[+-]?[0-9]+(\.[0-9]+)?": "number",
+                                "[A-Za-z][A-Za-z0-9_]*": "identifier"
+                            }
+                        },
+                        { token: "" },
+                    ]
+                }
             ],
-
             whitespace: [
-                [/[ \t\r\n]+/, 'white'],
-                [/\/\*/, 'comment', '@comment'],
-                [/\/\/.*$/, 'comment'],
+                {
+                    regex: /\/\/.*$/,
+                    action: { token: "comment" }
+                }
             ],
+            general3: [
+                {
+                    regex: /(message)(\s+)(@ident)([\s\n]*)(\{)/m,
+                    action: [
+                        { token: "keyword" },
+                        { token: "" },
+                        { token: "type.identifier" },
+                        { token: "" },
+                        { token: "delimiter.curly", next: "message3" }
+                    ]
+                },
+                {
+                    regex: /(enum)(\s+)(@ident)([\s\n]*)(\{)/m,
+                    action: [
+                        { token: "keyword" },
+                        { token: "" },
+                        { token: "type.identifier" },
+                        { token: "" },
+                        { token: "delimiter.curly", next: "enum3" }
+                    ]
+                }
+            ],
+            message3: [
+                { include: "whitespace" },
+                { include: "general3" },
+                {
+                    regex: /(})/,
+                    action: [
+                        { token: "delimiter.curly", next: "@pop" }
+                    ]
+                },
+                {
+                    regex: /(oneof)(\s+)(@ident)([\s\n]*)(\{)/m,
+                    action: [
+                        { token: "keyword" },
+                        { token: "" },
+                        { token: "variable.name" },
+                        { token: "" },
+                        { token: "delimiter.curly", next: "oneof3" }
+                    ]
+                },
+                {
+                    regex: /((?:repeated\s+)?)@field/,
+                    action: [
+                        { token: "keyword" },
+                        {
+                            cases: {
+                                "@typeKeywords": "keyword",
+                                "@default": "type.identifier"
+                            }
+                        },
+                        { token: "" },
+                        { token: "variable.name" },
+                        { token: "" },
+                        { token: "number" },
+                        { token: "" }
+                    ]
+                }
+            ],
+            oneof3: [
+                { include: "whitespace" },
+                {
+                    regex: /(})/,
+                    action: [
+                        { token: "delimiter.curly", next: "@pop" }
+                    ]
+                },
+                {
+                    regex: /@field/,
+                    action: [
+                        {
+                            cases: {
+                                "@typeKeywords": "keyword",
+                                "@default": "type.identifier"
+                            }
+                        },
+                        { token: "" },
+                        { token: "variable.name" },
+                        { token: "" },
+                        { token: "number" },
+                        { token: "" }
+                    ]
+                }
+            ],
+            enum3: [
+                { include: "whitespace" },
+                {
+                    regex: /(})/,
+                    action: [
+                        { token: "delimiter.curly", next: "@pop" }
+                    ]
+                },
+                {
+                    regex: /(@ident)(\s*\=\s*)([0-9]+)(;)/,
+                    action: [
+                        { token: "variable.name" },
+                        { token: "" },
+                        { token: "number" },
+                        { token: "" }
+                    ]
+                }
+            ]
         },
     };
-
 });
